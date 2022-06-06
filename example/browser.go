@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/konimarti/opc"
+	"github.com/rxue92/opcda"
 )
 
 func main() {
@@ -11,22 +11,22 @@ func main() {
 	nodes := []string{"localhost"}
 
 	// create browser and collect all tags on OPC server
-	browser, err := opc.CreateBrowser(progid, nodes)
+	browser, err := opcda.CreateBrowser(progid, nodes)
 	if err != nil {
 		panic(err)
 	}
 
 	// extract subtree
-	subtree := opc.ExtractBranchByName(browser, "textual")
+	subtree := opcda.ExtractBranchByName(browser, "textual")
 
 	// print out all the information
-	opc.PrettyPrint(subtree)
+	opcda.PrettyPrint(subtree)
 
 	// create opc connection with all tags from subtree
-	conn, _ := opc.NewConnection(
+	conn, _ := opcda.NewConnection(
 		progid,
 		nodes,
-		opc.CollectTags(subtree),
+		opcda.CollectTags(subtree),
 	)
 	defer conn.Close()
 

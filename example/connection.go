@@ -3,11 +3,11 @@ package main
 import (
 	"fmt"
 
-	"github.com/konimarti/opc"
+	"github.com/rxue92/opcda"
 )
 
 func main() {
-	client, err := opc.NewConnection(
+	client, err := opcda.NewConnection(
 		"Graybox.Simulator",
 		[]string{"localhost"},
 		[]string{"numeric.sin.int64", "numeric.saw.float"},

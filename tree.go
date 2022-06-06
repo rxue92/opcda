@@ -1,4 +1,4 @@
-package opc
+package opcda
 
 import "fmt"
 
@@ -12,8 +12,8 @@ type Tree struct {
 
 //Leaf contains the OPC tag and forms part of the Tree struct for the  OPC browser
 type Leaf struct {
-	Name string
-	Tag  string
+	Name   string `json:"name"`
+	ItemId string `json:"itemId"`
 }
 
 //ExtractBranchByName return substree with name
@@ -34,7 +34,7 @@ func ExtractBranchByName(tree *Tree, name string) *Tree {
 func CollectTags(tree *Tree) []string {
 	collection := []string{}
 	for _, l := range tree.Leaves {
-		collection = append(collection, l.Tag)
+		collection = append(collection, l.ItemId)
 	}
 	for _, b := range tree.Branches {
 		lowerCollection := CollectTags(b)
@@ -56,7 +56,7 @@ func printSubtree(tree *Tree, level int) {
 		space += "  "
 	}
 	for _, l := range tree.Leaves {
-		fmt.Println(space, "-", l.Tag)
+		fmt.Println(space, "-", l.ItemId)
 	}
 	for _, b := range tree.Branches {
 		fmt.Println(space, "+", b.Name)

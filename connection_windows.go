@@ -1,6 +1,6 @@
 // +build windows
 
-package opc
+package opcda
 
 import (
 	"errors"
@@ -29,7 +29,7 @@ func OleRelease() {
 //AutomationObject loads the OPC Automation Wrapper and handles to connection to the OPC Server.
 type AutomationObject struct {
 	unknown *ole.IUnknown
-	object  *ole.IDispatch
+	opc     *ole.IDispatch
 }
 
 //CreateBrowser returns the OPCBrowser object from the OPCServer.
@@ -37,13 +37,13 @@ type AutomationObject struct {
 func (ao *AutomationObject) CreateBrowser() (*Tree, error) {
 	// check if server is running, if not return error
 	if !ao.IsConnected() {
-		return nil, errors.New("Cannot create browser because we are not connected.")
+		return nil, errors.New("cannot create browser because we are not connected")
 	}
 
 	// create browser
-	browser, err := oleutil.CallMethod(ao.object, "CreateBrowser")
+	browser, err := oleutil.CallMethod(ao.opc, "CreateBrowser")
 	if err != nil {
-		return nil, errors.New("Failed to create OPCBrowser")
+		return nil, errors.New("failed to create OPCBrowser")
 	}
 
 	// move to root
@@ -73,7 +73,7 @@ func buildTree(browser *ole.IDispatch, branch *Tree) {
 		item := oleutil.MustCallMethod(browser, "Item", i).Value()
 		tag := oleutil.MustCallMethod(browser, "GetItemID", item).Value()
 
-		l := Leaf{Name: item.(string), Tag: tag.(string)}
+		l := Leaf{Name: item.(string), ItemId: tag.(string)}
 
 		logger.Println("\t", i, l)
 
@@ -118,14 +118,17 @@ func (ao *AutomationObject) Connect(server string, node string) (*AutomationItem
 
 	// try to connect to opc server and check for error
 	logger.Printf("Connecting to %s on node %s\n", server, node)
-	_, err := oleutil.CallMethod(ao.object, "Connect", server, node)
+	_, err := oleutil.CallMethod(ao.opc, "Connect", server, node)
 	if err != nil {
-		logger.Println("Connection failed.")
-		return nil, errors.New("Connection failed")
+		logger.Println("Connection failed:", err)
+		if oleError, ok := err.(*ole.OleError); ok {
+			logger.Printf("OleError: code=%d, sub=%s", oleError.Code(), oleError.SubError().Error())
+		}
+		return nil, errors.New("Connection failed:" + err.Error())
 	}
 
 	// set up opc groups and items
-	opcGroups, err := oleutil.GetProperty(ao.object, "OPCGroups")
+	opcGroups, err := oleutil.GetProperty(ao.opc, "OPCGroups")
 	if err != nil {
 		//logger.Println(err)
 		return nil, errors.New("cannot get OPCGroups property")
@@ -164,10 +167,10 @@ func (ao *AutomationObject) TryConnect(server string, nodes []string) (*Automati
 
 //IsConnected check if the server is properly connected and up and running.
 func (ao *AutomationObject) IsConnected() bool {
-	if ao.object == nil {
+	if ao.opc == nil {
 		return false
 	}
-	stateVt, err := oleutil.GetProperty(ao.object, "ServerState")
+	stateVt, err := oleutil.GetProperty(ao.opc, "ServerState")
 	if err != nil {
 		logger.Println("GetProperty call for ServerState failed", err)
 		return false
@@ -180,7 +183,7 @@ func (ao *AutomationObject) IsConnected() bool {
 
 //GetOPCServers returns a list of Prog ID on the specified node
 func (ao *AutomationObject) GetOPCServers(node string) []string {
-	progids, err := oleutil.CallMethod(ao.object, "GetOPCServers", node)
+	progids, err := oleutil.CallMethod(ao.opc, "GetOPCServers", node)
 	if err != nil {
 		logger.Println("GetOPCServers call failed.")
 		return []string{}
@@ -195,10 +198,28 @@ func (ao *AutomationObject) GetOPCServers(node string) []string {
 	return servers_found
 }
 
+func (ao *AutomationObject) PublicGroupNames() []string {
+	if !ao.IsConnected() {
+		return []string{}
+	}
+	publicGroups, err := oleutil.GetProperty(ao.opc, "PublicGroupNames")
+	if err != nil {
+		logger.Println("GetProperty call for PublicGroupNames failed", err)
+		return []string{}
+	}
+	var publicGroups_found []string
+	for _, v := range publicGroups.ToArray().ToStringArray() {
+		if v != "" {
+			publicGroups_found = append(publicGroups_found, v)
+		}
+	}
+	return publicGroups_found
+}
+
 //Disconnect checks if connected to server and if so, it calls 'disconnect'
 func (ao *AutomationObject) disconnect() {
 	if ao.IsConnected() {
-		_, err := oleutil.CallMethod(ao.object, "Disconnect")
+		_, err := oleutil.CallMethod(ao.opc, "Disconnect")
 		if err != nil {
 			logger.Println("Failed to disconnect.")
 		}
@@ -207,9 +228,9 @@ func (ao *AutomationObject) disconnect() {
 
 //Close releases the OLE objects in the AutomationObject.
 func (ao *AutomationObject) Close() {
-	if ao.object != nil {
+	if ao.opc != nil {
 		ao.disconnect()
-		ao.object.Release()
+		ao.opc.Release()
 	}
 	if ao.unknown != nil {
 		ao.unknown.Release()
@@ -217,7 +238,7 @@ func (ao *AutomationObject) Close() {
 }
 
 //NewAutomationObject connects to the COM object based on available wrappers.
-func NewAutomationObject() *AutomationObject {
+func NewAutomationObject() (*AutomationObject, error) {
 	wrappers := []string{"OPC.Automation.1", "Graybox.OPC.DAWrapper.1"}
 	var err error
 	var unknown *ole.IUnknown
@@ -227,22 +248,24 @@ func NewAutomationObject() *AutomationObject {
 			logger.Println("Loaded OPC Automation object with wrapper", wrapper)
 			break
 		}
-		logger.Println("Could not load OPC Automation object with wrapper", wrapper)
+		// 使用OPC.Automation.1 需要将GOARCH环境变量改为386，否则报没有注册类
+		// powershell: $env:GOARCH=386
+		logger.Printf("Could not load OPC Automation object with wrapper [%s], err=[%v]\n", wrapper, err)
 	}
 	if err != nil {
-		return &AutomationObject{}
+		return nil, err
 	}
 
 	opc, err := unknown.QueryInterface(ole.IID_IDispatch)
 	if err != nil {
-		fmt.Println("Could not QueryInterface")
-		return &AutomationObject{}
+		fmt.Println("Could not QueryInterface:", err)
+		return nil, err
 	}
 	object := AutomationObject{
 		unknown: unknown,
-		object:  opc,
+		opc:     opc,
 	}
-	return &object
+	return &object, nil
 }
 
 //AutomationItems store the OPCItems from OPCGroup and does the bookkeeping
@@ -259,7 +282,15 @@ func (ai *AutomationItems) addSingle(tag string) error {
 	if err != nil {
 		return errors.New(tag + ":" + err.Error())
 	}
-	ai.items[tag] = item.ToIDispatch()
+	// if item does not belong to address space, item.Val is nil
+	if item.Val == 0 {
+		return errors.New(tag + ": val is 0")
+	}
+	disp := item.ToIDispatch()
+	if disp == nil {
+		return errors.New(tag + ": could not get IDispatch")
+	}
+	ai.items[tag] = disp
 	return nil
 }
 
@@ -308,15 +339,11 @@ func (ai *AutomationItems) readFromOpc(opcitem *ole.IDispatch) (Item, error) {
 	ts := ole.NewVariant(ole.VT_DATE, 0)
 
 	//read tag from opc server and monitor duration in seconds
-	t := time.Now()
 	_, err := oleutil.CallMethod(opcitem, "Read", OPCCache, &v, &q, &ts)
-	opcReadsDuration.Observe(time.Since(t).Seconds())
 
 	if err != nil {
-		opcReadsCounter.WithLabelValues("failed").Inc()
 		return Item{}, err
 	}
-	opcReadsCounter.WithLabelValues("success").Inc()
 
 	return Item{
 		Value:     v.Value(),
@@ -392,7 +419,7 @@ func (conn *opcConnectionImpl) Write(tag string, value interface{}) error {
 		return conn.AutomationItems.writeToOpc(opcitem, value)
 	}
 	logger.Printf("Tag %s not found. Add it first before writing to it.", tag)
-	return errors.New("No Write performed")
+	return errors.New("no write performed")
 }
 
 //Read returns a map of the values of all added tags.
@@ -416,7 +443,7 @@ func (conn *opcConnectionImpl) Read() map[string]Item {
 func (conn *opcConnectionImpl) Tags() []string {
 	var tags []string
 	if conn.AutomationItems != nil {
-		for tag, _ := range conn.AutomationItems.items {
+		for tag := range conn.AutomationItems.items {
 			tags = append(tags, tag)
 		}
 	}
@@ -460,13 +487,19 @@ func (conn *opcConnectionImpl) Close() {
 
 //NewConnection establishes a connection to the OpcServer object.
 func NewConnection(server string, nodes []string, tags []string) (Connection, error) {
-	object := NewAutomationObject()
+	object, err := NewAutomationObject()
+	if err != nil {
+		return nil, err
+	}
 	items, err := object.TryConnect(server, nodes)
 	if err != nil {
+		object.disconnect()
 		return &opcConnectionImpl{}, err
 	}
 	err = items.Add(tags...)
 	if err != nil {
+		items.Close()
+		object.disconnect()
 		return &opcConnectionImpl{}, err
 	}
 	conn := opcConnectionImpl{
@@ -481,11 +514,148 @@ func NewConnection(server string, nodes []string, tags []string) (Connection, er
 
 //CreateBrowser creates an opc browser representation
 func CreateBrowser(server string, nodes []string) (*Tree, error) {
-	object := NewAutomationObject()
+	object, err := NewAutomationObject()
+	if err != nil {
+		return nil, err
+	}
 	defer object.Close()
-	_, err := object.TryConnect(server, nodes)
+	_, err = object.TryConnect(server, nodes)
 	if err != nil {
 		return nil, err
 	}
 	return object.CreateBrowser()
+}
+
+type BrowserImpl struct {
+	*AutomationObject
+	Server   string
+	Nodes    []string
+	mu       sync.Mutex
+	position string
+	browser  *ole.VARIANT
+}
+
+func NewBrowser(server string, nodes []string) (Browser, error) {
+	object, err := NewAutomationObject()
+	if err != nil {
+		return nil, err
+	}
+	items, err := object.TryConnect(server, nodes)
+	if err != nil {
+		return nil, err
+	}
+	items.Close()
+	// create browser
+	browser, err := oleutil.CallMethod(object.opc, "CreateBrowser")
+	if err != nil {
+		return nil, errors.New("failed to create OPCBrowser")
+	}
+
+	// move to root
+	oleutil.MustCallMethod(browser.ToIDispatch(), "MoveToRoot")
+	return &BrowserImpl{AutomationObject: object, Server: server, Nodes: nodes, browser: browser}, nil
+}
+
+func (b *BrowserImpl) Close() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.IsConnected() {
+		b.AutomationObject.Close()
+	}
+	b.browser.ToIDispatch().Release()
+}
+
+func (b *BrowserImpl) MoveTo(branches ...string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.IsConnected() {
+		oleutil.MustCallMethod(b.browser.ToIDispatch(), "MoveTo", branches)
+	}
+}
+
+func (b *BrowserImpl) MoveToRoot() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.IsConnected() {
+		oleutil.MustCallMethod(b.browser.ToIDispatch(), "MoveToRoot")
+	}
+}
+
+func (b *BrowserImpl) MoveUp() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.IsConnected() {
+		oleutil.MustCallMethod(b.browser.ToIDispatch(), "MoveUp")
+	}
+}
+
+func (b *BrowserImpl) MoveDown(branch string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.IsConnected() {
+		oleutil.MustCallMethod(b.browser.ToIDispatch(), "MoveDown", branch)
+	}
+}
+
+func (b *BrowserImpl) Position() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.IsConnected() {
+		p := oleutil.MustGetProperty(b.browser.ToIDispatch(), "CurrentPosition").Value().(string)
+		b.position = p
+	}
+	return b.position
+}
+
+func (b *BrowserImpl) ShowBranches() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.IsConnected() {
+		return []string{}
+	}
+
+	branches := make([]string, 0)
+	browser := b.browser.ToIDispatch()
+
+	// loop through branches
+	oleutil.MustCallMethod(browser, "ShowBranches").ToIDispatch()
+	count := oleutil.MustGetProperty(browser, "Count").Value().(int32)
+
+	// logger.Println("\tBranches count:", count)
+	for i := 1; i <= int(count); i++ {
+
+		nextName := oleutil.MustCallMethod(browser, "Item", i).Value()
+
+		// logger.Println("\t", i, "next branch:", nextName)
+		branches = append(branches, nextName.(string))
+	}
+	return branches
+}
+
+func (b *BrowserImpl) ShowLeafs() []Leaf {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.IsConnected() {
+		return []Leaf{}
+	}
+
+	leaves := make([]Leaf, 0)
+	browser := b.browser.ToIDispatch()
+	// loop through leafs
+	oleutil.MustCallMethod(browser, "ShowLeafs").ToIDispatch()
+	count := oleutil.MustGetProperty(browser, "Count").Value().(int32)
+
+	// logger.Println("\tLeafs count:", count)
+
+	for i := 1; i <= int(count); i++ {
+
+		item := oleutil.MustCallMethod(browser, "Item", i).Value()
+		tag := oleutil.MustCallMethod(browser, "GetItemID", item).Value()
+		l := Leaf{Name: item.(string), ItemId: tag.(string)}
+
+		// logger.Println("\t", i, l)
+
+		leaves = append(leaves, l)
+	}
+	return leaves
 }

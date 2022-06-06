@@ -1,4 +1,4 @@
-package opc
+package opcda
 
 import (
 	"testing"
@@ -11,9 +11,9 @@ func testingCreateNewTree() *Tree {
 		Parent:   nil,
 		Branches: []*Tree{},
 		Leaves: []Leaf{
-			Leaf{
-				Name: "bandwidth",
-				Tag:  "bandwidth",
+			{
+				Name:   "bandwidth",
+				ItemId: "bandwidth",
 			},
 		},
 	}
@@ -22,13 +22,13 @@ func testingCreateNewTree() *Tree {
 		Parent:   &root,
 		Branches: []*Tree{},
 		Leaves: []Leaf{
-			Leaf{
-				Name: "frequency",
-				Tag:  "options.frequency",
+			{
+				Name:   "frequency",
+				ItemId: "options.frequency",
 			},
-			Leaf{
-				Name: "amplitute",
-				Tag:  "options.amplitude",
+			{
+				Name:   "amplitute",
+				ItemId: "options.amplitude",
 			},
 		},
 	}
@@ -37,17 +37,17 @@ func testingCreateNewTree() *Tree {
 		Parent:   &root,
 		Branches: []*Tree{},
 		Leaves: []Leaf{
-			Leaf{
-				Name: "sin",
-				Tag:  "numeric.sin",
+			{
+				Name:   "sin",
+				ItemId: "numeric.sin",
 			},
-			Leaf{
-				Name: "cos",
-				Tag:  "numeric.cos",
+			{
+				Name:   "cos",
+				ItemId: "numeric.cos",
 			},
-			Leaf{
-				Name: "tan",
-				Tag:  "numeric.tan",
+			{
+				Name:   "tan",
+				ItemId: "numeric.tan",
 			},
 		},
 	}

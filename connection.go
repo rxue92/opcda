@@ -1,4 +1,4 @@
-package opc
+package opcda
 
 import (
 	"time"
@@ -62,4 +62,15 @@ func (i *Item) Good() bool {
 		return true
 	}
 	return false
+}
+
+type Browser interface {
+	Close()
+	MoveTo(branches ...string)
+	MoveToRoot()
+	MoveUp()
+	MoveDown(branch string)
+	Position() string
+	ShowBranches() []string // sub-branches of the current position
+	ShowLeafs() []Leaf      // items of the current position
 }

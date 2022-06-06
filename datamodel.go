@@ -1,4 +1,4 @@
-package opc
+package opcda
 
 import (
 	"io"
