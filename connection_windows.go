@@ -272,7 +272,12 @@ func NewAutomationObject() (*AutomationObject, error) {
 //for the individual OPC items. Tags can added, removed, and read.
 type AutomationItems struct {
 	addItemObject *ole.IDispatch
-	items         map[string]*ole.IDispatch
+	items         map[string]*itemWrap
+}
+
+type itemWrap struct {
+	*ole.IDispatch
+	writeOnly bool // if true, conn.Read() will not read this item
 }
 
 //addSingle adds the tag and returns an error. Client handles are not implemented yet.
@@ -290,7 +295,7 @@ func (ai *AutomationItems) addSingle(tag string) error {
 	if disp == nil {
 		return errors.New(tag + ": could not get IDispatch")
 	}
-	ai.items[tag] = disp
+	ai.items[tag] = &itemWrap{disp, false}
 	return nil
 }
 
@@ -377,7 +382,7 @@ func (ai *AutomationItems) Close() {
 
 //NewAutomationItems returns a new AutomationItems instance.
 func NewAutomationItems(opcitems *ole.IDispatch) *AutomationItems {
-	ai := AutomationItems{addItemObject: opcitems, items: make(map[string]*ole.IDispatch)}
+	ai := AutomationItems{addItemObject: opcitems, items: make(map[string]*itemWrap)}
 	return &ai
 }
 
@@ -398,7 +403,7 @@ func (conn *opcConnectionImpl) ReadItem(tag string) Item {
 	defer conn.mu.Unlock()
 	opcitem, ok := conn.AutomationItems.items[tag]
 	if ok {
-		item, err := conn.AutomationItems.readFromOpc(opcitem)
+		item, err := conn.AutomationItems.readFromOpc(opcitem.IDispatch)
 		if err == nil {
 			return item
 		}
@@ -411,15 +416,20 @@ func (conn *opcConnectionImpl) ReadItem(tag string) Item {
 }
 
 //Write writes a value to the OPC Server.
+//If tag not found, try add it first.
 func (conn *opcConnectionImpl) Write(tag string, value interface{}) error {
 	conn.mu.Lock()
 	defer conn.mu.Unlock()
-	opcitem, ok := conn.AutomationItems.items[tag]
-	if ok {
-		return conn.AutomationItems.writeToOpc(opcitem, value)
+	_, ok := conn.AutomationItems.items[tag]
+	if !ok {
+		err := conn.AutomationItems.addSingle(tag)
+		if err != nil {
+			return fmt.Errorf("failed to add tag %s: %s", tag, err)
+		}
+		conn.AutomationItems.items[tag].writeOnly = true
 	}
-	logger.Printf("Tag %s not found. Add it first before writing to it.", tag)
-	return errors.New("no write performed")
+	opcitem := conn.AutomationItems.items[tag]
+	return conn.AutomationItems.writeToOpc(opcitem.IDispatch, value)
 }
 
 //Read returns a map of the values of all added tags.
@@ -428,7 +438,10 @@ func (conn *opcConnectionImpl) Read() map[string]Item {
 	defer conn.mu.Unlock()
 	allTags := make(map[string]Item)
 	for tag, opcitem := range conn.AutomationItems.items {
-		item, err := conn.AutomationItems.readFromOpc(opcitem)
+		if opcitem.writeOnly {
+			continue
+		}
+		item, err := conn.AutomationItems.readFromOpc(opcitem.IDispatch)
 		if err != nil {
 			logger.Printf("Cannot read %s: %s. Trying to fix.", tag, err)
 			conn.fix()

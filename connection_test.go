@@ -1,13 +1,15 @@
-package opcda
+package opcda_test
 
 import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/rxue92/opcda"
 )
 
 func TestOPCBrowser(t *testing.T) {
-	browser, err := CreateBrowser(
+	browser, err := opcda.CreateBrowser(
 		"Graybox.Simulator",
 		[]string{"localhost"},
 	)
@@ -26,7 +28,7 @@ func TestOPCBrowser(t *testing.T) {
 }
 
 func TestNewConnectionNoTags(t *testing.T) {
-	client, _ := NewConnection(
+	client, _ := opcda.NewConnection(
 		"Graybox.Simulator",
 		[]string{"localhost"},
 		[]string{},
@@ -35,7 +37,7 @@ func TestNewConnectionNoTags(t *testing.T) {
 }
 
 func TestNewConnectionWithTags(t *testing.T) {
-	client, _ := NewConnection(
+	client, _ := opcda.NewConnection(
 		"Graybox.Simulator",
 		[]string{"localhost"},
 		[]string{"numeric.sin.int64", "numeric.saw.float"},
@@ -44,7 +46,7 @@ func TestNewConnectionWithTags(t *testing.T) {
 }
 
 func TestNewConnectionWrongServer(t *testing.T) {
-	client, err := NewConnection(
+	client, err := opcda.NewConnection(
 		"Graybox.Simulator.NOTREAL",
 		[]string{"localhost"},
 		[]string{},
@@ -58,7 +60,7 @@ func TestNewConnectionWrongServer(t *testing.T) {
 }
 
 func TestNewConnectionWrongNode(t *testing.T) {
-	client, err := NewConnection(
+	client, err := opcda.NewConnection(
 		"Graybox.Simulator",
 		[]string{"localhost.NOTREAL"},
 		[]string{},
@@ -72,7 +74,7 @@ func TestNewConnectionWrongNode(t *testing.T) {
 }
 
 func TestAddTags(t *testing.T) {
-	client, _ := NewConnection(
+	client, _ := opcda.NewConnection(
 		"Graybox.Simulator",
 		[]string{"localhost"},
 		[]string{},
@@ -82,7 +84,7 @@ func TestAddTags(t *testing.T) {
 }
 
 func TestRemoveTags(t *testing.T) {
-	client, _ := NewConnection(
+	client, _ := opcda.NewConnection(
 		"Graybox.Simulator",
 		[]string{"localhost"},
 		[]string{"numeric.sin.int64", "numeric.saw.float"},
@@ -93,7 +95,7 @@ func TestRemoveTags(t *testing.T) {
 }
 
 func TestGetTags(t *testing.T) {
-	client, _ := NewConnection(
+	client, _ := opcda.NewConnection(
 		"Graybox.Simulator",
 		[]string{"localhost"},
 		[]string{},
@@ -142,41 +144,25 @@ func TestGetTags(t *testing.T) {
 	}
 }
 
-func TestTags(t *testing.T) {
-	var want []string
-	client := &opcConnectionImpl{}
-	tags := client.Tags()
-	if !reflect.DeepEqual(tags, want) {
-		fmt.Printf("actual: %+v\n", tags)
-		fmt.Printf("Want: %+v\n", want)
-		t.Error("Tags() should return a empty array of strings")
-	}
-}
-
-func TestAutomationItemsClose(t *testing.T) {
-	conn := &opcConnectionImpl{}
-	conn.AutomationItems.Close()
-}
-
 func TestOpcRead(t *testing.T) {
-	client, _ := NewConnection(
+	client, _ := opcda.NewConnection(
 		"Graybox.Simulator",
 		[]string{"localhost"},
 		[]string{"numeric.sin.int64", "numeric.saw.float"},
 	)
 	defer client.Close()
 
-	var item Item
+	var item opcda.Item
 
 	// should be able to read tag because it has been added
 	item = client.ReadItem("numeric.sin.int64")
-	if reflect.DeepEqual(item, Item{}) {
+	if reflect.DeepEqual(item, opcda.Item{}) {
 		t.Fatal("this test should not have returned an empty item")
 	}
 
 	// should not be able to read tag because it does not exist
 	item = client.ReadItem("numeric.fantasy_tag.int64")
-	if !reflect.DeepEqual(item, Item{}) {
+	if !reflect.DeepEqual(item, opcda.Item{}) {
 		t.Fatal("this test should have returned an empty item")
 	}
 
@@ -187,7 +173,7 @@ func TestOpcRead(t *testing.T) {
 	}
 
 	// check Good() of Item
-	if item.Quality == OPCQualityGood {
+	if item.Quality == opcda.OPCQualityGood {
 		if item.Good() != true {
 			t.Fatal("failed to check quality of item")
 		}
@@ -199,7 +185,7 @@ func TestOpcRead(t *testing.T) {
 }
 
 func TestOpcWrite(t *testing.T) {
-	client, _ := NewConnection(
+	client, _ := opcda.NewConnection(
 		"Graybox.Simulator",
 		[]string{"localhost"},
 		[]string{"numeric.sin.int64", "numeric.saw.float"},
@@ -237,8 +223,8 @@ func TestOpcWrite(t *testing.T) {
 
 		// write new frequency to non-existing tag which should fail
 		err := client.Write(cfg.Tag, cfg.Payload)
-		if err == nil {
-			t.Fatal("this test should fail because tag has not been added yet and cannot be written to")
+		if err != nil {
+			t.Fatal("this test should not fail because tag has been added")
 		}
 
 		// add tag
@@ -257,7 +243,7 @@ func TestOpcWrite(t *testing.T) {
 		}
 
 		// check quality
-		if item.Quality == OPCQualityGoodButForced {
+		if item.Quality == opcda.OPCQualityGoodButForced {
 			if item.Good() != true {
 				t.Fatal("failed to check quality of item")
 			}
