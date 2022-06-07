@@ -1,27 +1,29 @@
-package opcda
+package opcda_test
 
 import (
 	"testing"
+
+	"github.com/rxue92/opcda"
 )
 
-func testingCreateNewTree() *Tree {
+func testingCreateNewTree() *opcda.Tree {
 
-	root := Tree{
+	root := opcda.Tree{
 		Name:     "root",
 		Parent:   nil,
-		Branches: []*Tree{},
-		Leaves: []Leaf{
+		Branches: []*opcda.Tree{},
+		Leaves: []opcda.Leaf{
 			{
 				Name:   "bandwidth",
 				ItemId: "bandwidth",
 			},
 		},
 	}
-	options := Tree{
+	options := opcda.Tree{
 		Name:     "options",
 		Parent:   &root,
-		Branches: []*Tree{},
-		Leaves: []Leaf{
+		Branches: []*opcda.Tree{},
+		Leaves: []opcda.Leaf{
 			{
 				Name:   "frequency",
 				ItemId: "options.frequency",
@@ -32,11 +34,11 @@ func testingCreateNewTree() *Tree {
 			},
 		},
 	}
-	numeric := Tree{
+	numeric := opcda.Tree{
 		Name:     "numeric",
 		Parent:   &root,
-		Branches: []*Tree{},
-		Leaves: []Leaf{
+		Branches: []*opcda.Tree{},
+		Leaves: []opcda.Leaf{
 			{
 				Name:   "sin",
 				ItemId: "numeric.sin",
@@ -51,26 +53,56 @@ func testingCreateNewTree() *Tree {
 			},
 		},
 	}
+	sim := opcda.Tree{
+		Name:   "sim",
+		Parent: &root,
+	}
+	dev1 := opcda.Tree{
+		Name:   "dev1",
+		Parent: &sim,
+		Leaves: []opcda.Leaf{
+			{
+				Name:   "t1",
+				ItemId: "sim.dev1.t1",
+			},
+			{
+				Name:   "t2",
+				ItemId: "sim.dev1.t2",
+			},
+		},
+	}
 
-	root.Branches = append(root.Branches, &options, &numeric)
+	sim.Branches = append(sim.Branches, &dev1)
+	root.Branches = append(root.Branches, &options, &numeric, &sim)
 	return &root
 }
 
 func TestTreeExtractBranchByName(t *testing.T) {
 	tree := testingCreateNewTree()
-	subtree := ExtractBranchByName(tree, "numeric")
+	subtree := opcda.ExtractBranchByName(tree, "numeric")
 	if subtree == nil {
 		t.Fatal("subtree not correctly extracted")
 	}
-	if len(CollectTags(subtree)) != 3 {
+	if len(opcda.CollectTags(subtree)) != 3 {
 		t.Fatal("subtree not correctly extracted")
 	}
 }
 
 func TestTreeCollectTags(t *testing.T) {
 	tree := testingCreateNewTree()
-	collection := CollectTags(tree)
-	if len(collection) != 6 {
+	collection := opcda.CollectTags(tree)
+	if len(collection) != 8 {
 		t.Fatal("not enough tags collected")
+	}
+}
+
+func TestExtractBranchByNames(t *testing.T) {
+	tree := testingCreateNewTree()
+	subTree := opcda.ExtractBranchByNames(tree, "sim", "dev1")
+	if subTree == nil {
+		t.Fatal("subtree not correctly extracted")
+	}
+	if len(opcda.CollectTags(subTree)) != 2 {
+		t.Fatal("subtree not correctly extracted")
 	}
 }

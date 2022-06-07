@@ -18,11 +18,39 @@ type Leaf struct {
 
 //ExtractBranchByName return substree with name
 func ExtractBranchByName(tree *Tree, name string) *Tree {
+	if tree == nil {
+		return nil
+	}
 	if tree.Name == name {
 		return tree
 	}
 	for _, b := range tree.Branches {
 		subtree := ExtractBranchByName(b, name)
+		if subtree != nil {
+			return subtree
+		}
+	}
+	return nil
+}
+
+//ExtractBranchByNames return substree specified by branch names of different levels
+func ExtractBranchByNames(tree *Tree, names ...string) *Tree {
+	if len(names) == 0 {
+		return tree
+	}
+
+	if len(names) > 1 {
+		return ExtractBranchByNames(ExtractBranchByNames(tree, names[0]), names[1:]...)
+	}
+
+	if tree == nil {
+		return nil
+	}
+	if tree.Name == names[0] {
+		return tree
+	}
+	for _, b := range tree.Branches {
+		subtree := ExtractBranchByNames(b, names[0])
 		if subtree != nil {
 			return subtree
 		}
@@ -45,6 +73,10 @@ func CollectTags(tree *Tree) []string {
 
 //PrettyPrint prints tree in a nice format
 func PrettyPrint(tree *Tree) {
+	if tree == nil {
+		fmt.Println("Tree is nil")
+		return
+	}
 	fmt.Println(tree.Name)
 	printSubtree(tree, 1)
 }
