@@ -254,3 +254,28 @@ func TestOpcWrite(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteOnly(t *testing.T) {
+	client, _ := opcda.NewConnection(
+		"Graybox.Simulator",
+		[]string{"localhost"},
+		[]string{"numeric.sin.int64", "numeric.saw.float"},
+	)
+	defer client.Close()
+
+	items := client.Read()
+	if len(items) != 2 {
+		t.Fatal("the map should have only two items")
+	}
+
+	// write new item
+	err := client.Write("storage.numeric.reg01", 0.12)
+	if err != nil {
+		t.Fatal("this test should not fail because client is connected")
+	}
+
+	items = client.Read()
+	if len(items) != 2 {
+		t.Fatal("the map should have only two items")
+	}
+}
