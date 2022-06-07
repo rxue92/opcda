@@ -498,6 +498,13 @@ func (conn *opcConnectionImpl) Close() {
 	}
 }
 
+func (conn *opcConnectionImpl) IsConnected() bool {
+	if conn.AutomationObject != nil {
+		return conn.AutomationObject.IsConnected()
+	}
+	return false
+}
+
 //NewConnection establishes a connection to the OpcServer object.
 func NewConnection(server string, nodes []string, tags []string) (Connection, error) {
 	object, err := NewAutomationObject()
@@ -539,7 +546,7 @@ func CreateBrowser(server string, nodes []string) (*Tree, error) {
 	return object.CreateBrowser()
 }
 
-type BrowserImpl struct {
+type browserImpl struct {
 	*AutomationObject
 	Server   string
 	Nodes    []string
@@ -566,10 +573,10 @@ func NewBrowser(server string, nodes []string) (Browser, error) {
 
 	// move to root
 	oleutil.MustCallMethod(browser.ToIDispatch(), "MoveToRoot")
-	return &BrowserImpl{AutomationObject: object, Server: server, Nodes: nodes, browser: browser}, nil
+	return &browserImpl{AutomationObject: object, Server: server, Nodes: nodes, browser: browser}, nil
 }
 
-func (b *BrowserImpl) Close() {
+func (b *browserImpl) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.IsConnected() {
@@ -578,7 +585,7 @@ func (b *BrowserImpl) Close() {
 	b.browser.ToIDispatch().Release()
 }
 
-func (b *BrowserImpl) MoveTo(branches ...string) {
+func (b *browserImpl) MoveTo(branches ...string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.IsConnected() {
@@ -586,7 +593,7 @@ func (b *BrowserImpl) MoveTo(branches ...string) {
 	}
 }
 
-func (b *BrowserImpl) MoveToRoot() {
+func (b *browserImpl) MoveToRoot() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.IsConnected() {
@@ -594,7 +601,7 @@ func (b *BrowserImpl) MoveToRoot() {
 	}
 }
 
-func (b *BrowserImpl) MoveUp() {
+func (b *browserImpl) MoveUp() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.IsConnected() {
@@ -602,7 +609,7 @@ func (b *BrowserImpl) MoveUp() {
 	}
 }
 
-func (b *BrowserImpl) MoveDown(branch string) {
+func (b *browserImpl) MoveDown(branch string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.IsConnected() {
@@ -610,7 +617,7 @@ func (b *BrowserImpl) MoveDown(branch string) {
 	}
 }
 
-func (b *BrowserImpl) Position() string {
+func (b *browserImpl) Position() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.IsConnected() {
@@ -620,7 +627,7 @@ func (b *BrowserImpl) Position() string {
 	return b.position
 }
 
-func (b *BrowserImpl) ShowBranches() []string {
+func (b *browserImpl) ShowBranches() []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if !b.IsConnected() {
@@ -645,7 +652,7 @@ func (b *BrowserImpl) ShowBranches() []string {
 	return branches
 }
 
-func (b *BrowserImpl) ShowLeafs() []Leaf {
+func (b *browserImpl) ShowLeafs() []Leaf {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if !b.IsConnected() {
