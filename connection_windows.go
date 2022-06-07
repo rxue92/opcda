@@ -121,10 +121,7 @@ func (ao *AutomationObject) Connect(server string, node string) (*AutomationItem
 	_, err := oleutil.CallMethod(ao.opc, "Connect", server, node)
 	if err != nil {
 		logger.Println("Connection failed:", err)
-		if oleError, ok := err.(*ole.OleError); ok {
-			logger.Printf("OleError: code=%d, sub=%s", oleError.Code(), oleError.SubError().Error())
-		}
-		return nil, errors.New("Connection failed:" + err.Error())
+		return nil, errors.New("connection failed: " + refineOleError(err).Error())
 	}
 
 	// set up opc groups and items
@@ -160,7 +157,7 @@ func (ao *AutomationObject) TryConnect(server string, nodes []string) (*Automati
 		if err == nil {
 			return items, err
 		}
-		errResult = errResult + err.Error() + "\n"
+		errResult = errResult + err.Error()
 	}
 	return nil, errors.New("TryConnect was not successful: " + errResult)
 }
