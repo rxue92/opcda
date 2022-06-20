@@ -458,7 +458,19 @@ func (conn *opcConnectionImpl) Tags() []string {
 		}
 	}
 	return tags
+}
 
+// Avoid read during adding or removing items
+func (conn *opcConnectionImpl) Add(items ...string) error {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	return conn.AutomationItems.Add(items...)
+}
+
+func (conn *opcConnectionImpl) Remove(item string) {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	conn.AutomationItems.Remove(item)
 }
 
 //fix tries to reconnect if connection is lost by creating a new connection
